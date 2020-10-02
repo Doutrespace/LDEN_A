@@ -20,7 +20,7 @@ ipak <- function(pkg){
 
 # Load libraries
 ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr",
-       "tidyverse", "ows4R", "spatstat", "fields", "GpGp", "rgdal", "ggplot2"))
+       "tidyverse", "ows4R", "spatstat", "fields", "GpGp", "rgdal", "ggplot2","rgeos"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -160,6 +160,12 @@ pts = ptsdf
 coordinates(pts) = ~ x + y
 proj4string(pts) = proj4string(grid)
 
+# na -> 0
+
+ptsdf$db[is.na(x = ptsdf$db)] <- 0
+
+idw <- gstat::idw(pts$db ~ 1, pts, newdata=grd, idp=2.0)
+
 # IDW
 idw = idw(formula = db~1, 
           locations = pts, 
@@ -167,9 +173,42 @@ idw = idw(formula = db~1,
 
 idwdf = as.data.frame(idw)
 
+idw=as.data.frame(idw)
+
+#set outline bbox
+
+x.range <- as.integer(range(Noise_Koblenz_r@extent@xmax[1]))
+y.range <- as.integer(range(Noise_Koblenz_r@extent@ymax[1]))
+
+plot(pt)
+#use the locator to click 4 points beyond the extent of the plot
+#and use those to set your x and y extents
+locator(4)
+
+x.range <- as.integer(c(371270, 408863))
+y.range <- as.integer(c(371270, 408863))
+
+## now expand your range to a grid with spacing that you'd like to use in your interpolation
+#here we will use 200m grid cells:
+grd <- expand.grid(x=seq(from=x.range[1], to=x.range[2], by=200), y=seq(from=y.range[1], to=y.range[2], by=200))
+
+## convert grid to SpatialPixel class
+coordinates(grd) <- ~ x+y
+gridded(grd) <- TRUE
+
+plot(grd, cex=1.5)
+
+koblenzoutline <- fortify(Noise_Koblenz_pol$geom, region="Noise_Koblenz_pol")
+
+plot<-ggplot(data=idw,aes(x=x,y=y))#start with the base-plot 
+layer1<-c(geom_tile(data=idw,aes(fill=var1.pred)))#then create a tile layer and fill with predicted values
+layer2<-c(geom_path(data=koblenzoutline,aes(x, y, group=group),colour = "grey40", size=1))#then create an outline layer
+# now add all of the data together
+plot+layer1+scale_fill_gradient(low="#FEEBE2", high="#7A0177")+coord_equal()
+
 ggplot()+
   geom_tile(data = idwdf, aes(x = x, y = y, fill = var1.pred))+
-  geom_point(data = ptsdf, aes(x = coords.x1, y = coords.x2),
+  geom_point(data = ptsdf, aes(x = x, y = y),
              shape = 4)+
   scale_fill_gradientn(colors = terrain.colors(10))+
   theme_bw()
@@ -192,10 +231,10 @@ plot(Noise)
 ## RASTER
 # Function to create raster
 Raster_Bot <- reactive({
-  Koblenz_city_noise <- filteredData()
-  coordinates(Koblenz_city_noise) = ~LON+LAT
-  x.range <- as.double(range(Koblenz_city_noise@coords[,1]))
-  y.range <- as.double(range(Koblenz_city_noise@coords[,2]))
+  pts$db <- filteredData()
+  coordinates(pts@coords.nrs) = ~LON+LAT
+  x.range <- as.double(range(pts[,1]))
+  y.range <- as.double(range(pts[,2]))
   grd <- expand.grid(x=seq(from=x.range[1],
                            to=x.range[2],
                            by=input$res),
@@ -210,11 +249,12 @@ Raster_Bot <- reactive({
   })
   idwrst <<- idwrst[[1]]
   names(idwrst) <<- "TEMP" # variable name
-  crs(idwrst) <<- CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+  crs(idwrst) <<- CRS("+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
   
   return(idwrst)
   
 })
+
 
 ############################################################################################################################
 ############################################################################################################################
