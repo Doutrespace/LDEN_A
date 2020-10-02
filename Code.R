@@ -90,7 +90,22 @@ Noise_Koblenz_r_bb <- bbox2SP(372533,5565087,407434.8,5592482.8)
 
 Noise_Koblenz_r_bb <- bbox(Noise_Koblenz_r)
 
-pts = data.frame(x=runif(10,Noise_Koblenz_r_bb), y=runif(10,Noise_Koblenz_r_bb))
+pts = data.frame(x=runif(1000,372533,5565087), y=runif(10,407434.8,5592482.8))
+
+pointcount = function(Noise_Koblenz_r_bb, pts){
+  # make a raster of zeroes like the input
+  r2 = Noise_Koblenz_r_bb@bbox
+  r2[] = 0
+  # get the cell index for each point and make a table:
+  counts = table(cellFromXY(Noise_Koblenz_r_bb@bbox,pts))
+  # fill in the raster with the counts from the cell index:
+  r2[as.numeric(names(counts))] = counts
+  return(r2)
+}
+
+r2 = pointcount(Noise_Koblenz_r_bb, pts)
+plot(r2)
+points(pts)
 
 values(Noise_Koblenz_r) <- 1:ncell(Noise_Koblenz_r)
 Noise_Koblenz_r[25] <- NA
