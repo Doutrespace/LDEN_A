@@ -19,7 +19,7 @@ ipak <- function(pkg){
 }
 
 # Load libraries
-ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit"))
+ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr", "tidyverse", "ows4R"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -34,7 +34,7 @@ Export_dir <- paste0(Main_Dir,"/Export")
 setwd(Data_dir)
 # Load Big polygon file (all europe)
 #Noise_All <- st_read("name of big file")
-Noise_All <- st_read("Koblenz_noise_pol.gpkg")
+Noise_Koblenz_pol <- st_read("Koblenz_noise_pol.gpkg")
 
 # Load Urban Atlas (this should be pulled from web based on name of city)
 UA <-st_read("Koblenz_UA_2012_pol.gpkg")
@@ -50,6 +50,20 @@ area <- SpatialPolygons(c(area), c(1:1), proj4string=CRS("+proj=longlat +datum=W
 
 # if data available do dran ^^
 
+wfs_bwk <- "http://www.opengis.net/cat/csw/2.0.2 http://schemas.opengis.net/csw/2.0.2/CSW-discovery.xsd"
+url <- parse_url(wfs_bwk)
+url$query <- list(service = "WFS",
+                  version = "2.0.0",
+                  request = "GetCapabilities")
+request <- build_url(url)
+request
+
+bwk_client <- WFSClient$new(wfs_bwk, 
+                            serviceVersion = "2.0.0")
+
+#wtf?
+
+
 AOI <- bbo
 #############################################################################################################
 #################################### Pre - Process datasets #################################################
@@ -58,11 +72,13 @@ AOI <- bbo
 # Reproject UA
 UA <- st_transform(UA, crs = st_crs(25832))
 
+Noise_Koblenz_pol <- st_transform(Noise_Koblenz_pol, crs = st_crs(25832))
+
 # Rasterize
 
-r <- raster(ncol=180, nrow=180)
-extent(r) <- extent(poly)
-rp <- rasterize(poly, r, 'AREA')
+Noise_Koblenz_r <- raster(ncol=1000, nrow=1000)
+extent(Noise_Koblenz_r) <- extent(Noise_Koblenz_pol)
+rp <- rasterize(Noise_Koblenz_pol$geom, Noise_Koblenz_r, 'AREA')
 
 #############################################################################################################
 ########################################## Process datasets #################################################
