@@ -19,7 +19,8 @@ ipak <- function(pkg){
 }
 
 # Load libraries
-ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr", "tidyverse", "ows4R", "spatstat"))
+ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr",
+       "tidyverse", "ows4R", "spatstat", "fields", "GpGp", "rgdal", "ggplot2"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -110,6 +111,69 @@ points(pts)
 values(Noise_Koblenz_r) <- 1:ncell(Noise_Koblenz_r)
 Noise_Koblenz_r[25] <- NA
 f <- focal(Noise_Koblenz_r, w=matrix(1,nrow=3, ncol=3), fun=mean, NAonly=TRUE, na.rm=TRUE) 
+
+##################################################################################################################
+# interpolation 2nd try
+
+
+# load data
+r <- Noise_Koblenz_r
+r = aggregate(r, fact = 10)
+
+b <- as(extent(r), "SpatialPolygons")
+
+c <- spsample(b, n = 200, type = "random")
+
+par(mar=c(1,1,1,1))
+plot(c)
+
+pts <- c
+
+rdf = as.data.frame(r, xy = T)
+ptsdf = as.data.frame(pts)
+
+# extract points
+ptsdf$db = extract(r@data,pts)
+
+ggplot()+
+  geom_point(data = ptsdf, aes(x = x, y = y
+                              ),shape = 4)+
+  labs(x ="x", y = "y")+
+  scale_color_gradientn(colors = terrain.colors(10))+
+  theme_bw()
+
+# IDW Interpolation
+library(gstat)
+
+# create empty grid
+grid = as(r, "SpatialPixels") 
+grddf = as.data.frame(grid)
+
+ggplot()+
+  geom_point(data = grddf, aes(x = x, y = y), shape = 3, size = 0.5)+
+  geom_point(data = ptsdf, aes(x = coords.x1, y = coords.x2),
+             color = "red")+
+  theme_bw()
+
+# convert df to spatial points
+pts = ptsdf
+coordinates(pts) = ~ coords.x1 + coords.x2
+proj4string(pts) = proj4string(grid)
+
+# IDW
+idw = idw(formula = z~1, 
+          locations = pts, 
+          newdata = grid)
+
+idwdf = as.data.frame(idw)
+
+ggplot()+
+  geom_tile(data = idwdf, aes(x = x, y = y, fill = var1.pred))+
+  geom_point(data = ptsdf, aes(x = coords.x1, y = coords.x2),
+             shape = 4)+
+  scale_fill_gradientn(colors = terrain.colors(10))+
+  theme_bw()
+
 
 #############################################################################################################
 ########################################## Process datasets #################################################
