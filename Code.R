@@ -19,7 +19,7 @@ ipak <- function(pkg){
 }
 
 # Load libraries
-ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr", "tidyverse", "ows4R"))
+ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr", "tidyverse", "ows4R", "spatstat"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -46,7 +46,7 @@ area <- area@object[[1]][[1]][[1]]
 ### polygonize the area and define crs
 area <- Polygon(area)
 area <- Polygons(c(area), "area")
-area <- SpatialPolygons(c(area), c(1:1), proj4string=CRS("+proj=longlat +datum=WGS84 +no_defs"))
+area <- SpatialPolygons(c(area), c(1:1), proj4string=CRS("+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"))
 
 # if data available do dran ^^
 
@@ -80,6 +80,22 @@ Noise_Koblenz_r <- raster(ncol=1000, nrow=1000)
 extent(Noise_Koblenz_r) <- extent(Noise_Koblenz_pol)
 rp <- rasterize(Noise_Koblenz_pol$geom, Noise_Koblenz_r, 'AREA')
 
+Noise_Koblenz_r <- raster(x = "C:/Users/Nillus/OneDrive/Desktop/LDEN_A/Export/test.tif")
+
+crs(Noise_Koblenz_r) <- "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+
+# interpolation
+
+Noise_Koblenz_r_bb <- bbox2SP(372533,5565087,407434.8,5592482.8)
+
+Noise_Koblenz_r_bb <- bbox(Noise_Koblenz_r)
+
+pts = data.frame(x=runif(10,Noise_Koblenz_r_bb), y=runif(10,Noise_Koblenz_r_bb))
+
+values(Noise_Koblenz_r) <- 1:ncell(Noise_Koblenz_r)
+Noise_Koblenz_r[25] <- NA
+f <- focal(Noise_Koblenz_r, w=matrix(1,nrow=3, ncol=3), fun=mean, NAonly=TRUE, na.rm=TRUE) 
+
 #############################################################################################################
 ########################################## Process datasets #################################################
 #############################################################################################################
@@ -87,6 +103,7 @@ rp <- rasterize(Noise_Koblenz_pol$geom, Noise_Koblenz_r, 'AREA')
 #############################################################################################################
 ################################################# Plots #####################################################
 #############################################################################################################
+
 
 
 Noise <- st_read("Koblenz_city_noise_fin.gpkg")
