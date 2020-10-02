@@ -122,7 +122,7 @@ r = aggregate(r, fact = 10)
 
 b <- as(extent(r), "SpatialPolygons")
 
-c <- spsample(b, n = 200, type = "random")
+c <- spsample(b, n = 2000, type = "random")
 
 par(mar=c(1,1,1,1))
 plot(c)
@@ -133,7 +133,7 @@ rdf = as.data.frame(r, xy = T)
 ptsdf = as.data.frame(pts)
 
 # extract points
-ptsdf$db = extract(r@data,pts)
+ptsdf$db = raster::extract(Noise_Koblenz_r,pts)
 
 ggplot()+
   geom_point(data = ptsdf, aes(x = x, y = y
@@ -151,17 +151,17 @@ grddf = as.data.frame(grid)
 
 ggplot()+
   geom_point(data = grddf, aes(x = x, y = y), shape = 3, size = 0.5)+
-  geom_point(data = ptsdf, aes(x = coords.x1, y = coords.x2),
+  geom_point(data = ptsdf, aes(x = x, y =y),
              color = "red")+
   theme_bw()
 
 # convert df to spatial points
 pts = ptsdf
-coordinates(pts) = ~ coords.x1 + coords.x2
+coordinates(pts) = ~ x + y
 proj4string(pts) = proj4string(grid)
 
 # IDW
-idw = idw(formula = z~1, 
+idw = idw(formula = db~1, 
           locations = pts, 
           newdata = grid)
 
