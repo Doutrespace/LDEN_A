@@ -19,7 +19,7 @@ ipak <- function(pkg){
 }
 
 # Load libraries
-ipak(c("sp","sf","raster", "cleangeo"))
+ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -33,10 +33,22 @@ Export_dir <- paste0(Main_Dir,"/Export")
 # Change to Data dir
 setwd(Data_dir)
 # Load Big polygon file (all europe)
-Noise_All <- st_read("name of big file")
+#Noise_All <- st_read("name of big file")
+Noise_All <- st_read("Koblenz_noise_pol.gpkg")
 
 # Load Urban Atlas (this should be pulled from web based on name of city)
 UA <-st_read("Koblenz_UA_2012_pol.gpkg")
+
+area <- mapview(editMap())
+
+area <- area@object[[1]][[1]][[1]]
+
+### polygonize the area and define crs
+area <- Polygon(area)
+area <- Polygons(c(area), "area")
+area <- SpatialPolygons(c(area), c(1:1), proj4string=CRS("+proj=longlat +datum=WGS84 +no_defs"))
+
+# if data available do dran ^^
 
 AOI <- bbo
 #############################################################################################################
@@ -45,6 +57,12 @@ AOI <- bbo
 # 
 # Reproject UA
 UA <- st_transform(UA, crs = st_crs(25832))
+
+# Rasterize
+
+r <- raster(ncol=180, nrow=180)
+extent(r) <- extent(poly)
+rp <- rasterize(poly, r, 'AREA')
 
 #############################################################################################################
 ########################################## Process datasets #################################################
