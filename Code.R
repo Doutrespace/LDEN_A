@@ -62,9 +62,6 @@ request
 bwk_client <- WFSClient$new(wfs_bwk, 
                             serviceVersion = "2.0.0")
 
-#wtf?
-
-
 AOI <- bbo
 #############################################################################################################
 #################################### Pre - Process datasets #################################################
@@ -78,7 +75,9 @@ Noise_Koblenz_pol <- st_transform(Noise_Koblenz_pol, crs = st_crs(25832))
 # Rasterize
 
 Noise_Koblenz_r <- raster(ncol=1000, nrow=1000)
+
 extent(Noise_Koblenz_r) <- extent(Noise_Koblenz_pol)
+
 rp <- rasterize(Noise_Koblenz_pol$geom, Noise_Koblenz_r, 'AREA')
 
 Noise_Koblenz_r <- raster(x = "C:/Users/Nillus/OneDrive/Desktop/LDEN_A/Export/test.tif")
@@ -162,14 +161,14 @@ proj4string(pts) = proj4string(grid)
 
 # na -> 0
 
-ptsdf$db[is.na(x = ptsdf$db)] <- 0
+pts$db[is.na(x = pts$db)] <- 0
 
-idw <- gstat::idw(pts$db ~ 1, pts, newdata=grd, idp=2.0)
+idw <- gstat::idw(pts$db ~ 1, pts, newdata=grid, idp=2.0)
 
 # IDW
-idw = idw(formula = db~1, 
-          locations = pts, 
-          newdata = grid)
+#idw = idw(formula = db~1, 
+          #locations = pts, 
+         # newdata = grid)
 
 idwdf = as.data.frame(idw)
 
@@ -177,32 +176,14 @@ idw=as.data.frame(idw)
 
 #set outline bbox
 
-x.range <- as.integer(range(Noise_Koblenz_r@extent@xmax[1]))
-y.range <- as.integer(range(Noise_Koblenz_r@extent@ymax[1]))
+x.range <- as.integer(range(LondonWards1@coords[,1]))
+y.range <- as.integer(range(LondonWards1@coords[,2]))
 
-plot(pt)
-#use the locator to click 4 points beyond the extent of the plot
-#and use those to set your x and y extents
-locator(4)
-
-x.range <- as.integer(c(371270, 408863))
-y.range <- as.integer(c(371270, 408863))
-
-## now expand your range to a grid with spacing that you'd like to use in your interpolation
-#here we will use 200m grid cells:
-grd <- expand.grid(x=seq(from=x.range[1], to=x.range[2], by=200), y=seq(from=y.range[1], to=y.range[2], by=200))
-
-## convert grid to SpatialPixel class
-coordinates(grd) <- ~ x+y
-gridded(grd) <- TRUE
-
-plot(grd, cex=1.5)
-
-koblenzoutline <- fortify(Noise_Koblenz_pol$geom, region="Noise_Koblenz_pol")
+koblenzoutline <- fortify(Noise_Koblenz_r@extent, region="Noise_Koblenz_pol")
 
 plot<-ggplot(data=idw,aes(x=x,y=y))#start with the base-plot 
 layer1<-c(geom_tile(data=idw,aes(fill=var1.pred)))#then create a tile layer and fill with predicted values
-layer2<-c(geom_path(data=koblenzoutline,aes(x, y, group=group),colour = "grey40", size=1))#then create an outline layer
+layer2<-c(geom_path(data=b,aes(x, y, group=group),colour = "grey40", size=1))#then create an outline layer
 # now add all of the data together
 plot+layer1+scale_fill_gradient(low="#FEEBE2", high="#7A0177")+coord_equal()
 
