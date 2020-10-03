@@ -20,7 +20,8 @@ ipak <- function(pkg){
 
 # Load libraries
 ipak(c("sp","sf","raster", "cleangeo", "mapview", "mapedit","DBI", "dplyr", "dbplyr", "odbc", "httr",
-       "tidyverse", "ows4R", "spatstat", "fields", "GpGp", "rgdal", "ggplot2","rgeos"))
+       "tidyverse", "ows4R", "spatstat", "fields", "GpGp", "rgdal", "ggplot2","rgeos", "here", "stars",
+       "ggnewscale", "scico", "ggrepel"))
 #############################################################################################################
 ########################################## Set WD datasets ##################################################
 #############################################################################################################
@@ -84,157 +85,83 @@ Noise_Koblenz_r <- raster(x = "C:/Users/Nillus/OneDrive/Desktop/LDEN_A/Export/te
 
 crs(Noise_Koblenz_r) <- "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
 
-# interpolation
+### Interpolation
 
-Noise_Koblenz_r_bb <- bbox2SP(372533,5565087,407434.8,5592482.8)
+################################################### CREATE IDW MODEL
+# Create dataframe from Noise merged file
+pts <- as.data.frame(Noise_Koblenz_r$test, xy=TRUE)
+pts <- na.omit(pts)
+names(pts)<- c("X","Y","DB")
 
-Noise_Koblenz_r_bb <- bbox(Noise_Koblenz_r)
+# Assign X-Y fields as coordinates 
+coordinates(pts) = ~X+Y
+x.range <- as.double(range(pts@coords[,1]))
+y.range <- as.double(range(pts@coords[,2]))
 
-pts = data.frame(x=runif(1000,372533,5565087), y=runif(10,407434.8,5592482.8))
+# Create empty grid basted on coordinates 
+grd <- expand.grid(x=seq(from=x.range[1],
+                         to=x.range[2],
+                         by=100),
+                   y=seq(from=y.range[1],
+                         to=y.range[2],
+                         by=100))
+coordinates(grd) <- ~ x+y
+gridded(grd) <- TRUE
 
-pointcount = function(Noise_Koblenz_r_bb, pts){
-  # make a raster of zeroes like the input
-  r2 = Noise_Koblenz_r_bb@bbox
-  r2[] = 0
-  # get the cell index for each point and make a table:
-  counts = table(cellFromXY(Noise_Koblenz_r_bb@bbox,pts))
-  # fill in the raster with the counts from the cell index:
-  r2[as.numeric(names(counts))] = counts
-  return(r2)
-}
+# Interpolate (IDW) Db values 
+idw <- gstat::idw(DB ~ 1, pts, newdata=grd, idp=5.0)
 
-r2 = pointcount(Noise_Koblenz_r_bb, pts)
-plot(r2)
-points(pts)
+# Create IDW raster file
+idwrst <- raster(idw)
+idwrst <- idwrst[[1]]
+names(idwrst) <- "Db" # variable name
+crs(idwrst) <- CRS("+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
+plot(idwrst)
 
-values(Noise_Koblenz_r) <- 1:ncell(Noise_Koblenz_r)
-Noise_Koblenz_r[25] <- NA
-f <- focal(Noise_Koblenz_r, w=matrix(1,nrow=3, ncol=3), fun=mean, NAonly=TRUE, na.rm=TRUE) 
+# Compare original values with predicted ones
+pts$DB_O <- raster::extract(idwrst,pts[,1:2])
+pts$Diff <- pts$DB_O - pts$DB
 
-##################################################################################################################
-# interpolation 2nd try
-
-
-# load data
-r <- Noise_Koblenz_r
-r = aggregate(r, fact = 10)
-
-b <- as(extent(r), "SpatialPolygons")
-
-c <- spsample(b, n = 2000, type = "random")
-
-par(mar=c(1,1,1,1))
-plot(c)
-
-pts <- c
-
-rdf = as.data.frame(r, xy = T)
-ptsdf = as.data.frame(pts)
-
-# extract points
-ptsdf$db = raster::extract(Noise_Koblenz_r,pts)
-
-ggplot()+
-  geom_point(data = ptsdf, aes(x = x, y = y
-                              ),shape = 4)+
-  labs(x ="x", y = "y")+
-  scale_color_gradientn(colors = terrain.colors(10))+
-  theme_bw()
-
-# IDW Interpolation
-library(gstat)
-
-# create empty grid
-grid = as(r, "SpatialPixels") 
-grddf = as.data.frame(grid)
-
-ggplot()+
-  geom_point(data = grddf, aes(x = x, y = y), shape = 3, size = 0.5)+
-  geom_point(data = ptsdf, aes(x = x, y =y),
-             color = "red")+
-  theme_bw()
-
-# convert df to spatial points
-pts = ptsdf
-coordinates(pts) = ~ x + y
-proj4string(pts) = proj4string(grid)
-
-# na -> 0
-
-pts$db[is.na(x = pts$db)] <- 0
-
-idw <- gstat::idw(pts$db ~ 1, pts, newdata=grid, idp=2.0)
-
-# IDW
-#idw = idw(formula = db~1, 
-          #locations = pts, 
-         # newdata = grid)
-
-idwdf = as.data.frame(idw)
-
-idw=as.data.frame(idw)
-
-#set outline bbox
-
-x.range <- as.integer(range(LondonWards1@coords[,1]))
-y.range <- as.integer(range(LondonWards1@coords[,2]))
-
-koblenzoutline <- fortify(Noise_Koblenz_r@extent, region="Noise_Koblenz_pol")
-
-plot<-ggplot(data=idw,aes(x=x,y=y))#start with the base-plot 
-layer1<-c(geom_tile(data=idw,aes(fill=var1.pred)))#then create a tile layer and fill with predicted values
-layer2<-c(geom_path(data=b,aes(x, y, group=group),colour = "grey40", size=1))#then create an outline layer
-# now add all of the data together
-plot+layer1+scale_fill_gradient(low="#FEEBE2", high="#7A0177")+coord_equal()
-
-ggplot()+
-  geom_tile(data = idwdf, aes(x = x, y = y, fill = var1.pred))+
-  geom_point(data = ptsdf, aes(x = x, y = y),
-             shape = 4)+
-  scale_fill_gradientn(colors = terrain.colors(10))+
-  theme_bw()
-
+# Export IDW raster
+writeRaster(idwrst,
+            paste0(Export_dir,'/IDW.tif'),
+            options=c('TFW=YES'),overwrite=TRUE)
 
 #############################################################################################################
 ########################################## Process datasets #################################################
 #############################################################################################################
+UA_poly <- st_transform(UA, "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
+
+# Extract the underlying raster values for each feature in the polygon layer
+UA_poly <- UA_poly %>% mutate(
+  DbMean = raster::extract(idwrst, UA_poly, fun = mean, na.rm = TRUE),
+  DbMax = raster::extract(idwrst, UA_poly, fun = max, na.rm = TRUE),
+  DbMin = raster::extract(idwrst, UA_poly, fun = min, na.rm = TRUE)
+)
+
+st_write(UA_poly, paste0(Export_dir,'/DDUF.gpkg'))
+
+UA_DDUF <- filter(UA_poly, class_2012 == "Discontinuous dense urban fabric (S.L. : 50% -  80%)")
+UA_DDUF <- as.data.frame(UA_DDUF)
+
+UA_GUA <- filter(UA_poly, class_2012 == "Green urban areas" )
+UA_GUA  <- as.data.frame(UA_GUA)
+
+
+library(patchwork)
+
+P1 <- ggplot(UA_DDUF, aes(x=DbMean)) + 
+  geom_density()
+
+P2 <- ggplot(UA_GUA, aes(x=DbMean)) + 
+  geom_density()
+
+P1 + P2
 
 #############################################################################################################
 ################################################# Plots #####################################################
 #############################################################################################################
 
-
-
-Noise <- st_read("Koblenz_city_noise_fin.gpkg")
-
-plot(Noise)
-
-## RASTER
-# Function to create raster
-Raster_Bot <- reactive({
-  pts$db <- filteredData()
-  coordinates(pts@coords.nrs) = ~LON+LAT
-  x.range <- as.double(range(pts[,1]))
-  y.range <- as.double(range(pts[,2]))
-  grd <- expand.grid(x=seq(from=x.range[1],
-                           to=x.range[2],
-                           by=input$res),
-                     y=seq(from=y.range[1],
-                           to=y.range[2],
-                           by=input$res))
-  coordinates(grd) <- ~ x+y
-  gridded(grd) <- TRUE
-  withProgress(message = 'Calculating raster', {
-    idw <- idw(formula=filteredData()[,selectVariable()] ~ 1, locations=Data2, newdata=grd)
-    idwrst <<- raster(idw)
-  })
-  idwrst <<- idwrst[[1]]
-  names(idwrst) <<- "TEMP" # variable name
-  crs(idwrst) <<- CRS("+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs")
-  
-  return(idwrst)
-  
-})
 
 
 ############################################################################################################################
