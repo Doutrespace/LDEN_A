@@ -66,7 +66,7 @@ crs(Noise_Koblenz_r) <- "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 
 
 ### Interpolation
 
-################################################### CREATE IDW MODEL ########################################
+############################################### CREATE IDW MODEL ##########################################
 # Create dataframe from Noise merged file
 pts <- as.data.frame(Noise_Koblenz_r$test, xy=TRUE)
 pts <- na.omit(pts)
@@ -105,6 +105,33 @@ pts$Diff <- pts$DB_O - pts$DB
 writeRaster(idwrst,
             paste0(Export_dir,'/IDW2.tif'),
             options=c('TFW=YES'),overwrite=TRUE)
+######################################## Create Kinging Model################################################
+# Create Spatial Dataframe
+coordinates(pts) = ~X+Y
+# Compute the sample variogram with 1st order polynomial equation as.formula(DB ~ X + Y)
+var.smpl <- variogram(object =  as.formula(DB ~ X + Y),
+                      data = pts,
+                      cloud = FALSE,
+                      cutoff=1000000,
+                      width=89900)
+
+# Compute the variogram model by passing the nugget, sill and range values
+dat.fit  <- fit.variogram(var.smpl, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=14, model="Sph", range=590000, nugget=0))
+
+# The following plot allows us to assess the fit
+plot(var.smpl, dat.fit, xlim=c(0,1000000))
+
+grd2 <- expand.grid(x=seq(from=x.range[1],
+                          to=x.range[2],
+                          by=100),
+                    y=seq(from=y.range[1],
+                          to=y.range[2],
+                          by=100))
+
+f.1 <- as.formula(pts ~ X + Y) 
+
+dat.krg <- krige(object =  as.formula(DB ~ X + Y), data = pts, grd2, dat.fit)
 
 #############################################################################################################
 ########################################## Process datasets #################################################
